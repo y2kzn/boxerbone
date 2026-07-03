@@ -18,7 +18,7 @@ app.get('/', (req: Request, res: Response) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Painel Admin Premium - Stumble Guys</title>
+        <title>Painel Admin Avançado - Stumble Guys</title>
         <style>
             body { font-family: Arial, sans-serif; background: #121212; color: #fff; padding: 15px; margin: 0; }
             .container { max-width: 700px; margin: 20px auto; background: #1e1e1e; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.6); }
@@ -39,7 +39,8 @@ app.get('/', (req: Request, res: Response) => {
             .reward-box label { font-size: 12px; margin: 0 0 4px 0; color: #00ff88; }
             .reward-box input { padding: 6px; text-align: center; font-size: 14px; }
 
-            .round-container { background: #262626; padding: 15px; border-radius: 8px; border: 1px solid #333; margin-bottom: 15px; }
+            .round-card { background: #262626; padding: 15px; border-radius: 8px; border: 1px solid #333; margin-bottom: 15px; }
+            .round-title { color: #ffaa00; font-weight: bold; display: block; margin-bottom: 10px; font-size: 15px; }
             
             button { width: 100%; padding: 15px; margin-top: 35px; background: #00ff88; border: none; color: #000; font-weight: bold; font-size: 17px; border-radius: 6px; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,255,136,0.2); }
             button:hover { background: #00cc6e; transform: translateY(-1px); }
@@ -54,47 +55,43 @@ app.get('/', (req: Request, res: Response) => {
     <body>
         <div class="container">
             <h1>Painel do Evento BoxerBone</h1>
-            <div class="subtitle">Configuração de Torneios com Suporte a Todos os Mapas</div>
+            <div class="subtitle">Controle de Jogadores, Fases, Recompensas e Região</div>
             
             <form id="tournamentForm">
                 
-                <h3>🖼️ Design e Identificação</h3>
+                <h3>🖼️ Configurações Principais</h3>
                 <label for="title">Nome Geral do Torneio:</label>
                 <input type="text" id="title" required>
 
                 <label for="imageUrl">Link do Banner/Imagem (URL):</label>
                 <input type="url" id="imageUrl" placeholder="https://imgur.com/exemplo.png" required>
 
-                <label for="maxPlayers">Limite Máximo de Jogadores Totais:</label>
-                <input type="number" id="maxPlayers" min="2" max="100" required>
+                <label for="region">Região do Servidor (Server Region):</label>
+                <select id="region">
+                    <option value="sa">América do Sul (SA - Brazil)</option>
+                    <option value="na">América do Norte (NA)</option>
+                    <option value="eu">Europa (EU)</option>
+                    <option value="asia">Ásia (ASIA)</option>
+                    <option value="me">Oriente Médio (ME)</option>
+                    <option value="in">Índia (IN)</option>
+                </select>
 
-                <h3>🔄 Configuração das Fases (Rounds)</h3>
-                
-                <div class="round-container">
-                    <strong style="color: #ffaa00;">Fase 1 (Round 1)</strong>
-                    <label for="round1_map">Mapa:</label>
-                    <select id="round1_map" class="map-selector"></select>
-                    
-                    <label for="round1_qualifiers">Jogadores que Classificam neste Round:</label>
-                    <input type="number" id="round1_qualifiers" min="1" value="16" required>
-                </div>
+                <label for="maxPlayers">Quantidade Total de Players no Torneio:</label>
+                <input type="number" id="maxPlayers" min="2" max="100" value="32" required>
 
-                <div class="round-container">
-                    <strong style="color: #ffaa00;">Fase 2 (Round 2)</strong>
-                    <label for="round2_map">Mapa:</label>
-                    <select id="round2_map" class="map-selector"></select>
-                    
-                    <label for="round2_qualifiers">Jogadores que Classificam neste Round:</label>
-                    <input type="number" id="round2_qualifiers" min="1" value="8" required>
-                </div>
+                <label for="totalFases">Quantidade Total de Fases (Rounds):</label>
+                <select id="totalFases" onchange="gerarCamposRounds(this.value)">
+                    <option value="1">1 Fase</option>
+                    <option value="2">2 Fases</option>
+                    <option value="3" selected>3 Fases</option>
+                    <option value="4">4 Fases</option>
+                    <option value="5">5 Fases</option>
+                </select>
 
-                <div class="round-container">
-                    <strong style="color: #ffaa00;">Fase 3 (Round 3 - Final)</strong>
-                    <label for="round3_map">Mapa da Grande Final:</label>
-                    <select id="round3_map" class="map-selector"></select>
-                </div>
+                <h3>🔄 Configuração de cada Fase / Round</h3>
+                <div id="roundsContainerMaster"></div>
 
-                <h3>🎭 Grade de Emotes Especiais (Inventário Completo)</h3>
+                <h3>🎭 Grade de Emotes Especiais (Inventário)</h3>
                 <div class="grid-emotes">
                     <div class="checkbox-item"><input type="checkbox" id="em_punch"><label for="em_punch">Soco (Punch)</label></div>
                     <div class="checkbox-item"><input type="checkbox" id="em_kick"><label for="em_kick">Rasteira (Kick)</label></div>
@@ -125,7 +122,6 @@ app.get('/', (req: Request, res: Response) => {
         </div>
 
         <script>
-            // Lista com todos os 19 mapas fornecidos
             const mapsList = [
                 { id: "level1_whirly", name: "Spin go round" },
                 { id: "level2_tile", name: "Tile Fall" },
@@ -148,17 +144,46 @@ app.get('/', (req: Request, res: Response) => {
                 { id: "level19_block", name: "Block Dash" }
             ];
 
-            // Injeta as opções de mapa dinamicamente nos seletores de round
-            document.querySelectorAll('.map-selector').forEach(select => {
-                mapsList.forEach(map => {
-                    const opt = document.createElement('option');
-                    opt.value = map.id;
-                    opt.innerText = \`\${map.name} (\${map.id})\`;
-                    select.appendChild(opt);
-                });
-            });
+            function gerarCamposRounds(quantidade, dadosSalvos = null) {
+                const container = document.getElementById('roundsContainerMaster');
+                container.innerHTML = '';
+                
+                const qtd = parseInt(quantidade);
+                for (let i = 1; i <= qtd; i++) {
+                    const isLast = (i === qtd);
+                    
+                    let optionsHtml = '';
+                    mapsList.forEach(map => {
+                        optionsHtml += \`<option value="\${map.id}">\${map.name} (\${map.id})</option>\`;
+                    });
 
-            // Criar os 16 campos de premiação
+                    let roundHtml = \`
+                        <div class="round-card" id="card_round_\${i}">
+                            <span class="round-title">Fase \${i} / Round \${i} \${isLast ? '🏆 (Grande Final)' : ''}</span>
+                            
+                            <label>Mapa da Fase:</label>
+                            <select id="round_\${i}_map">\${optionsHtml}</select>
+                    \`;
+
+                    if (!isLast) {
+                        roundHtml += \`
+                            <label>Quantidade de Players que se classificam nessa fase:</label>
+                            <input type="number" id="round_\${i}_qualifiers" min="1" value="\${i==1 ? 16 : 8}" required>
+                        \`;
+                    }
+                    
+                    roundHtml += \`</div>\`;
+                    container.innerHTML += roundHtml;
+
+                    if (dadosSalvos && dadosSalvos[\`round\${i}\`]) {
+                        document.getElementById(\`round_\${i}_map\`).value = dadosSalvos[\`round\${i}\`].map || 'level19_block';
+                        if (!isLast && document.getElementById(\`round_\${i}_qualifiers\`)) {
+                            document.getElementById(\`round_\${i}_qualifiers\`).value = dadosSalvos[\`round\${i}\`].qualifiers || 16;
+                        }
+                    }
+                }
+            }
+
             const rewardsContainer = document.getElementById('rewardsContainer');
             for (let i = 1; i <= 16; i++) {
                 rewardsContainer.innerHTML += \`
@@ -181,16 +206,14 @@ app.get('/', (req: Request, res: Response) => {
                         const data = await res.json();
                         document.getElementById('title').value = data.title || '';
                         document.getElementById('imageUrl').value = data.imageUrl || '';
+                        document.getElementById('region').value = data.region || 'sa';
                         document.getElementById('maxPlayers').value = data.maxPlayers || 32;
                         document.getElementById('statusSelect').value = data.status || 'active';
                         
-                        if (data.fases) {
-                            document.getElementById('round1_map').value = data.fases.round1?.map || 'level19_block';
-                            document.getElementById('round1_qualifiers').value = data.fases.round1?.qualifiers || 16;
-                            document.getElementById('round2_map').value = data.fases.round2?.map || 'level19_block';
-                            document.getElementById('round2_qualifiers').value = data.fases.round2?.qualifiers || 8;
-                            document.getElementById('round3_map').value = data.fases.round3?.map || 'level19_block';
-                        }
+                        const totalFasesSalvas = data.totalFases || 3;
+                        document.getElementById('totalFases').value = totalFasesSalvas;
+                        
+                        gerarCamposRounds(totalFasesSalvas, data.fases);
 
                         const allowedEmotes = data.allowedEmotes || [];
                         emoteIds.forEach(id => {
@@ -201,25 +224,37 @@ app.get('/', (req: Request, res: Response) => {
                             document.getElementById('top' + i).value = data.rewards?.\`top\${i}\` || 0;
                         }
 
-                        document.getElementById('status').innerText = 'Todos os dados e mapas carregados!';
+                        document.getElementById('status').innerText = 'Dados carregados com sucesso!';
                         document.getElementById('status').style.background = '#00ff8822';
                         document.getElementById('status').style.color = '#00ff88';
                     } else {
-                        document.getElementById('status').innerText = 'Nenhum arquivo encontrado. Crie um novo!';
+                        gerarCamposRounds(3);
+                        document.getElementById('status').innerText = 'Sem arquivo na nuvem. Crie um novo abaixo.';
                         document.getElementById('status').style.background = '#ffaa0022';
                         document.getElementById('status').style.color = '#ffaa00';
                     }
                 } catch (err) {
-                    document.getElementById('status').innerText = 'Erro de sincronização local.';
+                    document.getElementById('status').innerText = 'Erro ao conectar na API.';
                     document.getElementById('status').style.color = '#ff3333';
                 }
             }
 
             document.getElementById('tournamentForm').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                document.getElementById('status').innerText = 'Sincronizando com o GitHub...';
+                document.getElementById('status').innerText = 'Sincronizando novas fases com o GitHub...';
                 document.getElementById('status').style.background = '#ffaa0022';
                 document.getElementById('status').style.color = '#ffaa00';
+
+                const totalFasesNum = parseInt(document.getElementById('totalFases').value);
+                
+                const fasesObj = {};
+                for (let i = 1; i <= totalFasesNum; i++) {
+                    const isLast = (i === totalFasesNum);
+                    fasesObj[\`round\${i}\`] = {
+                        map: document.getElementById(\`round_\${i}_map\`).value,
+                        qualifiers: !isLast ? parseInt(document.getElementById(\`round_\${i}_qualifiers\`).value) : 1
+                    };
+                }
 
                 const allowedEmotes = [];
                 emoteIds.forEach(id => {
@@ -234,20 +269,10 @@ app.get('/', (req: Request, res: Response) => {
                 const updatedData = {
                     title: document.getElementById('title').value,
                     imageUrl: document.getElementById('imageUrl').value,
+                    region: document.getElementById('region').value,
                     maxPlayers: parseInt(document.getElementById('maxPlayers').value),
-                    fases: {
-                        round1: {
-                            map: document.getElementById('round1_map').value,
-                            qualifiers: parseInt(document.getElementById('round1_qualifiers').value)
-                        },
-                        round2: {
-                            map: document.getElementById('round2_map').value,
-                            qualifiers: parseInt(document.getElementById('round2_qualifiers').value)
-                        },
-                        round3: {
-                            map: document.getElementById('round3_map').value
-                        }
-                    },
+                    totalFases: totalFasesNum,
+                    fases: fasesObj,
                     rewards: rewardsObj,
                     allowedEmotes: allowedEmotes,
                     status: document.getElementById('statusSelect').value
@@ -261,16 +286,14 @@ app.get('/', (req: Request, res: Response) => {
                     });
                     const result = await res.json();
                     if (res.ok) {
-                        document.getElementById('status').innerText = '✓ Sucesso! Mapas e dados gravados no repositório.';
+                        document.getElementById('status').innerText = '✓ Tudo salvo e região atualizada no GitHub!';
                         document.getElementById('status').style.background = '#00ff8822';
                         document.getElementById('status').style.color = '#00ff88';
                     } else {
                         document.getElementById('status').innerText = 'Erro: ' + result.error;
-                        document.getElementById('status').style.color = '#ff3333';
                     }
                 } catch (err) {
-                    document.getElementById('status').innerText = 'Erro de rede ao salvar.';
-                    document.getElementById('status').style.color = '#ff3333';
+                    document.getElementById('status').innerText = 'Erro de rede.';
                 }
             });
 
@@ -281,10 +304,11 @@ app.get('/', (req: Request, res: Response) => {
     `);
 });
 
+// Rotas da API Express
 app.get('/api/tournament', (req: Request, res: Response) => {
     try {
         if (!fs.existsSync(tournamentFilePath)) {
-            return res.status(404).json({ error: 'Arquivo do torneio vazio.' });
+            return res.status(404).json({ error: 'Arquivo vazio.' });
         }
         const fileData = fs.readFileSync(tournamentFilePath, 'utf-8');
         return res.json(JSON.parse(fileData));
@@ -301,7 +325,7 @@ app.post('/api/tournament/save', async (req: Request, res: Response) => {
     const gitFilePath = process.env.GITHUB_FILE_PATH || 'src/tournament.json';
 
     if (!token || !repo) {
-        return res.status(500).json({ error: 'Variáveis de ambiente ausentes no Render.' });
+        return res.status(500).json({ error: 'Variáveis do GitHub ausentes no Render.' });
     }
 
     try {
@@ -322,7 +346,7 @@ app.post('/api/tournament/save', async (req: Request, res: Response) => {
         }
 
         const commitBody = {
-            message: 'Painel Admin: Atualização completa da lista de mapas e rounds',
+            message: 'Painel Admin: Adicionada seleção de região do servidor de jogo',
             content: Buffer.from(JSON.stringify(newData, null, 2)).toString('base64'),
             sha: sha || undefined,
             branch: branch
@@ -334,12 +358,12 @@ app.post('/api/tournament/save', async (req: Request, res: Response) => {
             body: JSON.stringify(commitBody)
         });
 
-        if (!updateRes.ok) throw new Error('Falha ao commitar nova estrutura no repositório.');
+        if (!updateRes.ok) throw new Error('Falha ao commitar no repositório.');
 
-        return res.json({ success: true, message: 'Dados sincronizados com sucesso no GitHub!' });
+        return res.json({ success: true, message: 'Dados e região salvos com sucesso!' });
     } catch (error: any) {
         return res.status(500).json({ error: error.message });
     }
 });
 
-app.listen(port, () => console.log(`Servidor rodando com a lista completa de mapas na porta ${port}`));
+app.listen(port, () => console.log(`Servidor rodando com suporte a regiões na porta ${port}`));
