@@ -9,7 +9,8 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-const tournamentFilePath = path.join(__dirname, 'tournament.json');
+// Salva o JSON na raiz do projeto para o bot ler facilmente
+const tournamentFilePath = path.join(__dirname, '..', 'tournament.json');
 
 app.get('/', (req: Request, res: Response) => {
     res.send(`
@@ -37,7 +38,7 @@ app.get('/', (req: Request, res: Response) => {
             .grid-rewards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; background: #262626; padding: 12px; border-radius: 6px; border: 1px solid #333; }
             .reward-box { background: #1e1e1e; padding: 8px; border-radius: 4px; border: 1px solid #2a2a2a; text-align: center; }
             .reward-box label { font-size: 12px; margin: 0 0 4px 0; color: #00ff88; }
-            .reward-box input { padding: 6px; text-align: center; font-size: 14px; }
+            .reward-box input { padding: 6px; text-align: center; font-size: 14px; width: 100%; }
 
             .round-card { background: #262626; padding: 15px; border-radius: 8px; border: 1px solid #333; margin-bottom: 15px; }
             .round-title { color: #ffaa00; font-weight: bold; display: block; margin-bottom: 10px; font-size: 15px; }
@@ -146,52 +147,62 @@ app.get('/', (req: Request, res: Response) => {
 
             function gerarCamposRounds(quantidade, dadosSalvos = null) {
                 const container = document.getElementById('roundsContainerMaster');
+                if (!container) return;
                 container.innerHTML = '';
                 
-                const qtd = parseInt(quantidade);
+                const qtd = parseInt(quantidade) || 3;
                 for (let i = 1; i <= qtd; i++) {
                     const isLast = (i === qtd);
                     
                     let optionsHtml = '';
                     mapsList.forEach(map => {
-                        optionsHtml += \`<option value="\${map.id}">\${map.name} (\${map.id})</option>\`;
+                        optionsHtml += `<option value="\${map.id}">\${map.name} (\${map.id})</option>`;
                     });
 
-                    let roundHtml = \`
+                    let roundHtml = `
                         <div class="round-card" id="card_round_\${i}">
                             <span class="round-title">Fase \${i} / Round \${i} \${isLast ? '🏆 (Grande Final)' : ''}</span>
                             
                             <label>Mapa da Fase:</label>
                             <select id="round_\${i}_map">\${optionsHtml}</select>
-                    \`;
+                    `;
 
                     if (!isLast) {
-                        roundHtml += \`
+                        roundHtml += `
                             <label>Quantidade de Players que se classificam nessa fase:</label>
                             <input type="number" id="round_\${i}_qualifiers" min="1" value="\${i==1 ? 16 : 8}" required>
-                        \`;
+                        `;
                     }
                     
-                    roundHtml += \`</div>\`;
+                    roundHtml += `</div>`;
                     container.innerHTML += roundHtml;
 
                     if (dadosSalvos && dadosSalvos[\`round\${i}\`]) {
-                        document.getElementById(\`round_\${i}_map\`).value = dadosSalvos[\`round\${i}\`].map || 'level19_block';
-                        if (!isLast && document.getElementById(\`round_\${i}_qualifiers\`)) {
-                            document.getElementById(\`round_\${i}_qualifiers\`).value = dadosSalvos[\`round\${i}\`].qualifiers || 16;
+                        const selMap = document.getElementById(\`round_\${i}_map\`);
+                        if(selMap) selMap.value = dadosSalvos[\`round\${i}\`].map || 'level19_block';
+                        
+                        const inpQual = document.getElementById(\`round_\${i}_qualifiers\`);
+                        if (!isLast && inpQual) {
+                            inpQual.value = dadosSalvos[\`round\${i}\`].qualifiers || 16;
                         }
                     }
                 }
             }
 
-            const rewardsContainer = document.getElementById('rewardsContainer');
-            for (let i = 1; i <= 16; i++) {
-                rewardsContainer.innerHTML += \`
-                    <div class="reward-box">
-                        <label>TOP \${i}</label>
-                        <input type="number" id="top\${i}" min="0" value="0" required>
-                    </div>
-                \`;
+            function inicializarCamposPremios(dadosPremios = null) {
+                const rewardsContainer = document.getElementById('rewardsContainer');
+                if (!rewardsContainer) return;
+                rewardsContainer.innerHTML = '';
+                
+                for (let i = 1; i <= 16; i++) {
+                    const valorSalvo = (dadosPremios && dadosPremios[\`top\${i}\`] !== undefined) ? dadosPremios[\`top\${i}\`] : 0;
+                    rewardsContainer.innerHTML += `
+                        <div class="reward-box">
+                            <label>TOP \${i}</label>
+                            <input type="number" id="top\${i}" min="0" value="\${valorSalvo}" required>
+                        </div>
+                    `;
+                }
             }
 
             const emoteIds = [
@@ -213,29 +224,27 @@ app.get('/', (req: Request, res: Response) => {
                         const totalFasesSalvas = data.totalFases || 3;
                         document.getElementById('totalFases').value = totalFasesSalvas;
                         
-                        gerarCamposRounds(totalFasesSalvas, data.fases);
+                        gerarCamposRounds(totalFasesSalvas, data.fases || null);
+                        inicializarCamposPremios(data.rewards || null);
 
                         const allowedEmotes = data.allowedEmotes || [];
                         emoteIds.forEach(id => {
-                            document.getElementById('em_' + id).checked = allowedEmotes.includes(id);
+                            const el = document.getElementById('em_' + id);
+                            if(el) el.checked = allowedEmotes.includes(id);
                         });
-
-                        for (let i = 1; i <= 16; i++) {
-                            document.getElementById('top' + i).value = data.rewards?.\`top\${i}\` || 0;
-                        }
 
                         document.getElementById('status').innerText = 'Dados carregados com sucesso!';
                         document.getElementById('status').style.background = '#00ff8822';
                         document.getElementById('status').style.color = '#00ff88';
                     } else {
-                        gerarCamposRounds(3);
-                        document.getElementById('status').innerText = 'Sem arquivo na nuvem. Crie um novo abaixo.';
-                        document.getElementById('status').style.background = '#ffaa0022';
-                        document.getElementById('status').style.color = '#ffaa00';
+                        throw new Error('Sem arquivo na nuvem');
                     }
                 } catch (err) {
-                    document.getElementById('status').innerText = 'Erro ao conectar na API.';
-                    document.getElementById('status').style.color = '#ff3333';
+                    gerarCamposRounds(3, null);
+                    inicializarCamposPremios(null);
+                    document.getElementById('status').innerText = 'Pronto para criar uma nova configuração!';
+                    document.getElementById('status').style.background = '#ffaa0022';
+                    document.getElementById('status').style.color = '#ffaa00';
                 }
             }
 
@@ -245,32 +254,37 @@ app.get('/', (req: Request, res: Response) => {
                 document.getElementById('status').style.background = '#ffaa0022';
                 document.getElementById('status').style.color = '#ffaa00';
 
-                const totalFasesNum = parseInt(document.getElementById('totalFases').value);
+                const totalFasesNum = parseInt(document.getElementById('totalFases').value) || 3;
                 
                 const fasesObj = {};
                 for (let i = 1; i <= totalFasesNum; i++) {
                     const isLast = (i === totalFasesNum);
+                    const mapEl = document.getElementById(\`round_\${i}_map\`);
+                    const qualEl = document.getElementById(\`round_\${i}_qualifiers\`);
+                    
                     fasesObj[\`round\${i}\`] = {
-                        map: document.getElementById(\`round_\${i}_map\`).value,
-                        qualifiers: !isLast ? parseInt(document.getElementById(\`round_\${i}_qualifiers\`).value) : 1
+                        map: mapEl ? mapEl.value : 'level19_block',
+                        qualifiers: (!isLast && qualEl) ? parseInt(qualEl.value) : 1
                     };
                 }
 
                 const allowedEmotes = [];
                 emoteIds.forEach(id => {
-                    if (document.getElementById('em_' + id).checked) allowedEmotes.push(id);
+                    const el = document.getElementById('em_' + id);
+                    if (el && el.checked) allowedEmotes.push(id);
                 });
 
                 const rewardsObj = {};
                 for (let i = 1; i <= 16; i++) {
-                    rewardsObj[\`top\${i}\`] = parseInt(document.getElementById('top' + i).value) || 0;
+                    const rEl = document.getElementById('top' + i);
+                    rewardsObj[\`top\${i}\`] = rEl ? (parseInt(rEl.value) || 0) : 0;
                 }
 
                 const updatedData = {
                     title: document.getElementById('title').value,
                     imageUrl: document.getElementById('imageUrl').value,
                     region: document.getElementById('region').value,
-                    maxPlayers: parseInt(document.getElementById('maxPlayers').value),
+                    maxPlayers: parseInt(document.getElementById('maxPlayers').value) || 32,
                     totalFases: totalFasesNum,
                     fases: fasesObj,
                     rewards: rewardsObj,
@@ -284,16 +298,15 @@ app.get('/', (req: Request, res: Response) => {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(updatedData)
                     });
-                    const result = await res.json();
                     if (res.ok) {
-                        document.getElementById('status').innerText = '✓ Tudo salvo e região atualizada no GitHub!';
+                        document.getElementById('status').innerText = '✓ Sincronizado com o GitHub com sucesso!';
                         document.getElementById('status').style.background = '#00ff8822';
                         document.getElementById('status').style.color = '#00ff88';
                     } else {
-                        document.getElementById('status').innerText = 'Erro: ' + result.error;
+                        document.getElementById('status').innerText = 'Erro ao salvar no GitHub.';
                     }
                 } catch (err) {
-                    document.getElementById('status').innerText = 'Erro de rede.';
+                    document.getElementById('status').innerText = 'Erro de conexão de rede.';
                 }
             });
 
@@ -304,7 +317,6 @@ app.get('/', (req: Request, res: Response) => {
     `);
 });
 
-// Rotas da API Express
 app.get('/api/tournament', (req: Request, res: Response) => {
     try {
         if (!fs.existsSync(tournamentFilePath)) {
@@ -322,7 +334,7 @@ app.post('/api/tournament/save', async (req: Request, res: Response) => {
     const token = process.env.GITHUB_TOKEN;
     const repo = process.env.GITHUB_REPO;
     const branch = process.env.GITHUB_BRANCH || 'main';
-    const gitFilePath = process.env.GITHUB_FILE_PATH || 'src/tournament.json';
+    const gitFilePath = process.env.GITHUB_FILE_PATH || 'tournament.json';
 
     if (!token || !repo) {
         return res.status(500).json({ error: 'Variáveis do GitHub ausentes no Render.' });
@@ -346,7 +358,7 @@ app.post('/api/tournament/save', async (req: Request, res: Response) => {
         }
 
         const commitBody = {
-            message: 'Painel Admin: Adicionada seleção de região do servidor de jogo',
+            message: 'Painel Admin: Correção completa de renderização de fases e gemas',
             content: Buffer.from(JSON.stringify(newData, null, 2)).toString('base64'),
             sha: sha || undefined,
             branch: branch
@@ -360,10 +372,10 @@ app.post('/api/tournament/save', async (req: Request, res: Response) => {
 
         if (!updateRes.ok) throw new Error('Falha ao commitar no repositório.');
 
-        return res.json({ success: true, message: 'Dados e região salvos com sucesso!' });
+        return res.json({ success: true });
     } catch (error: any) {
         return res.status(500).json({ error: error.message });
     }
 });
 
-app.listen(port, () => console.log(`Servidor rodando com suporte a regiões na porta ${port}`));
+app.listen(port, () => console.log(`Servidor BoxerBone ativo na porta ${port}`));
